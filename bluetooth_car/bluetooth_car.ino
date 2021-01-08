@@ -1,5 +1,4 @@
-// BAL BLA BLA
- //www.elegoo.com
+//www.elegoo.com
 #include <Servo.h>
 #include <Stepper.h>
 // Prima di caricare il codice, rimuovere la componente bluetooth dal robot
