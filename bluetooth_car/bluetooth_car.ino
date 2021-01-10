@@ -1,4 +1,4 @@
-//www.elegoo.com
+ //www.elegoo.com
 #include <Servo.h>
 #include <Stepper.h>
 // Prima di caricare il codice, rimuovere la componente bluetooth dal robot
@@ -156,7 +156,7 @@ boolean headLeft(){
     while (headAngle < 170) { //gira la testa a sinistra e se vede un ostacolo lo riferisce alla funzione avoidObastacle, che provvederà a continuare a girare. Questo finchè la testa non si è girata di 90 gradi
       headAngle=head.read();
       Serial.println(headAngle);
-      headAngle=headAngle + 5;
+      headAngle=headAngle + 10;
       head.write(headAngle);
       delay(1000);
       if (obstacle(1, true, 20) == true) {
@@ -174,7 +174,7 @@ boolean headRight(){
     while (headAngle > 10) {
       Serial.println(headAngle);
       headAngle=head.read();
-      headAngle=headAngle - 5;
+      headAngle=headAngle - 10;
       head.write(headAngle);
       delay(500);
       if (obstacle(1, true, 20) == true){
@@ -232,11 +232,17 @@ void timer(unsigned long differenzaTempo, boolean flagObstacle, boolean flagTime
       if (flagTimer == false) stateChange();
       return;
     }
-    tempoCorrente = millis();
-    if ((tempoCorrente - tempoIniziale) > differenzaTempo) break;// Calcola il tempo passato dall'inizio della chiamata alla funzione, se maggiore di quell dato come input esce
     
+    tempoCorrente = millis();
+    if ((tempoCorrente - tempoIniziale) > differenzaTempo){ 
+      break;// Calcola il tempo passato dall'inizio della chiamata alla funzione, se maggiore di quell dato come input esce
+    }
   }
+  if (flagObstacle == false){
+  Serial.println(tempoCorrente - tempoIniziale);
+  Serial.println(differenzaTempo);
   stop(); //Quando scade il timer, esce e si ferma
+  }
 }
 
 void indipendent(){
@@ -246,6 +252,7 @@ int azione; // prossima azione da svolgere h
       getstr = Serial.read();
       if (getstr == 'r') {
       stop();
+      Serial.println("Done");
       break;
       }
     }
@@ -256,20 +263,20 @@ int azione; // prossima azione da svolgere h
       avoidObstacle();
       // timer(0, false, true); // se c'è un ostacolo torna indietro per 2 secondi
     } */
-    delay(500);
+    delay(2000);
     azione = random(1,4); // 1 va avanti, 2 gira a destra e e 3 gira a sinistra
     if (azione == 1) {
       forward();
-      timer(random(3000, 5000), false, false); // funzione per compiere l'azione per un eterminato tempo passato come parametro
+      timer(random(8000, 12000), false, false); // funzione per compiere l'azione per un eterminato tempo passato come parametro
     }
     else {
       if (azione == 2) {
         left();
-        timer(random(3000, 6000), false, false); //gira a destra per un tempo casuale compreso tra 1 e 8 secondi
+        timer(random(5000, 8000), false, false); //gira a destra per un tempo casuale compreso tra 1 e 8 secondi
       }
       else {
         right();
-        timer(random(3000, 6000), false, false); // gira a sinistra per un tempo casuale compreso tra 1 e 8 secondi
+        timer(random(5000, 8000), false, false); // gira a sinistra per un tempo casuale compreso tra 1 e 8 secondi
       }
     }
   }
