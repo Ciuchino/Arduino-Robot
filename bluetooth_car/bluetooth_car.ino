@@ -23,7 +23,11 @@ bool state = LOW;
 char getstr;
 int Echo = A4;  
 int Trig = A5; 
+
 void timer(unsigned long differenzaTempo, boolean flagObstacle, boolean flagTimer);
+void forward();
+void back();
+void stop();
 
 const int MPU_ADDR = 0x68; // I2C address of the MPU-6050. If AD0 pin is set to HIGH, the I2C address will be 0x69.
 int16_t accelerometer_x, accelerometer_y, accelerometer_z; // variables for accelerometer raw data
@@ -35,6 +39,7 @@ char* convert_int16_to_str(int16_t i) { // converts int16 to string. Moreover, r
   sprintf(tmp_str, "%6d", i);
   return tmp_str;
 }
+
 
 void GYSetup() //function for the GY setup
 {
@@ -79,7 +84,19 @@ void GYSetup() //function for the GY setup
 }
 
 void GYValues() {
+  int minimo, massimo;
+  boolean primo;
   while (true) {
+    
+   if (Serial.available() > 0) {
+      getstr = Serial.read();
+    if (getstr == 'G') break;
+    if (getstr == 'S') stop();
+    if (getstr == 'A') forward();
+    if (getstr == 'C') back();
+
+   }
+
   Wire.beginTransmission(MPU_ADDR);
   Wire.write(0x3B); // starting with register 0x3B (ACCEL_XOUT_H) [MPU-6000 and MPU-6050 Register Map and Descriptions Revision 4.2, p.40]
   Wire.endTransmission(false); // the parameter indicates that the Arduino will send a restart. As a result, the connection is kept active.
@@ -95,7 +112,7 @@ void GYValues() {
   gyro_z = Wire.read()<<8 | Wire.read(); // reading registers: 0x47 (GYRO_ZOUT_H) and 0x48 (GYRO_ZOUT_L)
   
   // print out data
-  Serial.print("aX = "); Serial.print(convert_int16_to_str(accelerometer_x));
+  /*Serial.print("aX = "); Serial.print(convert_int16_to_str(accelerometer_x));
   Serial.print(" | aY = "); Serial.print(convert_int16_to_str(accelerometer_y));
   Serial.print(" | aZ = "); Serial.print(convert_int16_to_str(accelerometer_z));
   // the following equation was taken from the documentation [MPU-6000/MPU-6050 Register Map and Description, p.30]
@@ -103,11 +120,18 @@ void GYValues() {
   Serial.print(" | gX = "); Serial.print(convert_int16_to_str(gyro_x));
   Serial.print(" | gY = "); Serial.print(convert_int16_to_str(gyro_y));
   Serial.print(" | gZ = "); Serial.print(convert_int16_to_str(gyro_z));
-  Serial.println();
-  
+  Serial.println();*/
+  if (primo) {
+    massimo = accelerometer_x;
+    minimo = accelerometer_x;
+  }
+ if (accelerometer_x < minimo) minimo = accelerometer_x;
+ if (accelerometer_x > massimo) massimo = accelerometer_x;
   // delay
   delay(1000);
   }
+  Serial.println(minimo);
+  Serial.println(massimo);
 }
 
 //Ultrasonic distance measurement Sub function
