@@ -1,6 +1,7 @@
  //www.elegoo.com
 #include <Servo.h>
 #include <Stepper.h>
+#include <Wire.h>
 // Prima di caricare il codice, rimuovere la componente bluetooth dal robot
 
 #define ENA 5
@@ -24,30 +25,89 @@ int Echo = A4;
 int Trig = A5; 
 void timer(unsigned long differenzaTempo, boolean flagObstacle, boolean flagTimer);
 
-boolean headLeftProva(unsigned long differenzaTempo, boolean flagObstacle, boolean flagTimer){
-  unsigned long tempoIniziale;
-  unsigned long tempoCorrente;
-  tempoIniziale = millis(); //calcola il tempo iniziale in millisecondi
-  while (true) {
-    
-    if (flagObstacle == false and obstacle(ITERAZIONIOSTACOLI, flagTimer, 15)== true) { // Rilevato un ostacolo
+const int MPU_ADDR = 0x68; // I2C address of the MPU-6050. If AD0 pin is set to HIGH, the I2C address will be 0x69.
+int16_t accelerometer_x, accelerometer_y, accelerometer_z; // variables for accelerometer raw data
+int16_t gyro_x, gyro_y, gyro_z; // variables for gyro raw data
+int16_t temperature; // variables for temperature data
+char tmp_str[7]; // temporary variable used in convert function
 
-      Serial.println("OSTACOLO!");
-      if (flagTimer == false){ // funzione timer invocata da funzione indipendent e non da timer per ricorsione
-       stop();
-       delay(500);      
-       stateChange();     
-      }
-      avoidObstacle();
-      // timer(0, false, true); // se c'è un ostacolo gira a destra finchè vede un ostacolo e passa alla funzione il parametro false, cosi se la funzione continua a rilevare un ostacolo mentre gira, obastacle sa che sta girando, e non che sta compiendo una azione
-      if (flagTimer == false) stateChange();
-      return;
+char* convert_int16_to_str(int16_t i) { // converts int16 to string. Moreover, resulting strings will have the same length in the debug monitor.
+  sprintf(tmp_str, "%6d", i);
+  return tmp_str;
+}
+
+void GYSetup() //function for the GY setup
+{
+  byte error, address;
+  int nDevices;
+ 
+  Serial.println("Scanning...");
+ 
+  nDevices = 0;
+  for(address = 1; address < 127; address++ ) 
+  {
+    // The i2c_scanner uses the return value of
+    // the Write.endTransmisstion to see if
+    // a device did acknowledge to the address.
+    Wire.beginTransmission(address);
+    error = Wire.endTransmission();
+ 
+    if (error == 0)
+    {
+      Serial.print("I2C device found at address 0x");
+      if (address<16) 
+        Serial.print("0");
+      Serial.print(address,HEX);
+      Serial.println("  !");
+ 
+      nDevices++;
     }
-    tempoCorrente = millis();
-    if ((tempoCorrente - tempoIniziale) > differenzaTempo) break;// Calcola il tempo passato dall'inizio della chiamata alla funzione, se maggiore di quell dato come input esce
-    
+    else if (error==4) 
+    {
+      Serial.print("Unknow error at address 0x");
+      if (address<16) 
+        Serial.print("0");
+      Serial.println(address,HEX);
+    }    
   }
-  stop(); //Quando scade il timer, esce e si ferma
+  if (nDevices == 0)
+    Serial.println("No I2C devices found\n");
+  else
+    Serial.println("done\n");
+ 
+  delay(5000);           // wait 5 seconds for next scan
+}
+
+void GYValues() {
+  while (true) {
+  Wire.beginTransmission(MPU_ADDR);
+  Wire.write(0x3B); // starting with register 0x3B (ACCEL_XOUT_H) [MPU-6000 and MPU-6050 Register Map and Descriptions Revision 4.2, p.40]
+  Wire.endTransmission(false); // the parameter indicates that the Arduino will send a restart. As a result, the connection is kept active.
+  Wire.requestFrom(MPU_ADDR, 7*2, true); // request a total of 7*2=14 registers
+  
+  // "Wire.read()<<8 | Wire.read();" means two registers are read and stored in the same variable
+  accelerometer_x = Wire.read()<<8 | Wire.read(); // reading registers: 0x3B (ACCEL_XOUT_H) and 0x3C (ACCEL_XOUT_L)
+  accelerometer_y = Wire.read()<<8 | Wire.read(); // reading registers: 0x3D (ACCEL_YOUT_H) and 0x3E (ACCEL_YOUT_L)
+  accelerometer_z = Wire.read()<<8 | Wire.read(); // reading registers: 0x3F (ACCEL_ZOUT_H) and 0x40 (ACCEL_ZOUT_L)
+  temperature = Wire.read()<<8 | Wire.read(); // reading registers: 0x41 (TEMP_OUT_H) and 0x42 (TEMP_OUT_L)
+  gyro_x = Wire.read()<<8 | Wire.read(); // reading registers: 0x43 (GYRO_XOUT_H) and 0x44 (GYRO_XOUT_L)
+  gyro_y = Wire.read()<<8 | Wire.read(); // reading registers: 0x45 (GYRO_YOUT_H) and 0x46 (GYRO_YOUT_L)
+  gyro_z = Wire.read()<<8 | Wire.read(); // reading registers: 0x47 (GYRO_ZOUT_H) and 0x48 (GYRO_ZOUT_L)
+  
+  // print out data
+  Serial.print("aX = "); Serial.print(convert_int16_to_str(accelerometer_x));
+  Serial.print(" | aY = "); Serial.print(convert_int16_to_str(accelerometer_y));
+  Serial.print(" | aZ = "); Serial.print(convert_int16_to_str(accelerometer_z));
+  // the following equation was taken from the documentation [MPU-6000/MPU-6050 Register Map and Description, p.30]
+  Serial.print(" | tmp = "); Serial.print(temperature/340.00+36.53);
+  Serial.print(" | gX = "); Serial.print(convert_int16_to_str(gyro_x));
+  Serial.print(" | gY = "); Serial.print(convert_int16_to_str(gyro_y));
+  Serial.print(" | gZ = "); Serial.print(convert_int16_to_str(gyro_z));
+  Serial.println();
+  
+  // delay
+  delay(1000);
+  }
 }
 
 //Ultrasonic distance measurement Sub function
@@ -284,15 +344,24 @@ int azione; // prossima azione da svolgere h
 
 
 void setup() {
+  Serial.begin(9600);
+ 
+  Wire.begin(); //Gyroscope setup
+  Wire.beginTransmission(MPU_ADDR); // Begins a transmission to the I2C slave (GY-521 board)
+  Wire.write(0x6B); // PWR_MGMT_1 register
+  Wire.write(0); // set to zero (wakes up the MPU-6050)
+  Wire.endTransmission(true);
+  
   digitalWrite(8, LOW); //arm
   digitalWrite(9, LOW);
   digitalWrite(10, LOW);
-  digitalWrite(11, LOW); 
+  digitalWrite(11, LOW);
+   
   head.attach(3);  //head
   head.write(90);
-  Serial.begin(9600);
   pinMode(Echo, INPUT); 
-  pinMode(Trig, OUTPUT); 
+  pinMode(Trig, OUTPUT);
+   
   pinMode(LED, OUTPUT);  //motor 
   pinMode(IN1,OUTPUT);
   pinMode(IN2,OUTPUT);
@@ -300,6 +369,8 @@ void setup() {
   pinMode(IN4,OUTPUT);
   pinMode(ENA,OUTPUT);
   pinMode(ENB,OUTPUT);
+  
+  GYSetup();
   stop();
 }
 
@@ -308,7 +379,7 @@ void loop() {
     switch(getstr){
     case 'e': armup(); break;
     case 'g': armdown(); break;
-    case 'H': headLeftProva(20000, true, true); break;
+    case 'H': headLeft(); break;
     case 'F': headRight(); break;
     case 'E': headCenter(); break;
     case 'A': forward(); break;
@@ -316,7 +387,7 @@ void loop() {
     case 'B': left(); break;
     case 'D': right();break;
     case 'S': stop();   break;
-    case 'G': stateChange(); break;
+    case 'G': GYValues(); break;
     case 'r': indipendent(); break;
     }
     
