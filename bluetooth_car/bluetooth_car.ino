@@ -2,6 +2,7 @@
 #include <Servo.h>
 #include <Stepper.h>
 #include <Wire.h>
+#include <EEPROM.h>
 // Prima di caricare il codice, rimuovere la componente bluetooth dal robot
 
 #define ENA 5
@@ -86,7 +87,12 @@ void GYSetup() //function for the GY setup
 void GYValues() {
   int minimo, massimo;
   boolean primo;
-  while (true) {
+  int cont=0, addr=0, i;
+  for (i=0; i<EEPROM.length(); i++) {
+    EEPROM.write(i, 0);
+  }
+  while (cont<10) {
+   if(cont==3) forward();
     
    if (Serial.available() > 0) {
       getstr = Serial.read();
@@ -96,7 +102,7 @@ void GYValues() {
     if (getstr == 'C') back();
 
    }
-
+  
   Wire.beginTransmission(MPU_ADDR);
   Wire.write(0x3B); // starting with register 0x3B (ACCEL_XOUT_H) [MPU-6000 and MPU-6050 Register Map and Descriptions Revision 4.2, p.40]
   Wire.endTransmission(false); // the parameter indicates that the Arduino will send a restart. As a result, the connection is kept active.
@@ -112,26 +118,40 @@ void GYValues() {
   gyro_z = Wire.read()<<8 | Wire.read(); // reading registers: 0x47 (GYRO_ZOUT_H) and 0x48 (GYRO_ZOUT_L)
   
   // print out data
-  /*Serial.print("aX = "); Serial.print(convert_int16_to_str(accelerometer_x));
+  Serial.print("aX = "); Serial.print(convert_int16_to_str(accelerometer_x));
   Serial.print(" | aY = "); Serial.print(convert_int16_to_str(accelerometer_y));
   Serial.print(" | aZ = "); Serial.print(convert_int16_to_str(accelerometer_z));
   // the following equation was taken from the documentation [MPU-6000/MPU-6050 Register Map and Description, p.30]
-  Serial.print(" | tmp = "); Serial.print(temperature/340.00+36.53);
+  /*Serial.print(" | tmp = "); Serial.print(temperature/340.00+36.53);
   Serial.print(" | gX = "); Serial.print(convert_int16_to_str(gyro_x));
   Serial.print(" | gY = "); Serial.print(convert_int16_to_str(gyro_y));
   Serial.print(" | gZ = "); Serial.print(convert_int16_to_str(gyro_z));
   Serial.println();*/
-  if (primo) {
+  /*if (primo) {
     massimo = accelerometer_x;
     minimo = accelerometer_x;
   }
  if (accelerometer_x < minimo) minimo = accelerometer_x;
- if (accelerometer_x > massimo) massimo = accelerometer_x;
+ if (accelerometer_x > massimo) massimo = accelerometer_x;*/
+
+ EEPROM.put(addr, accelerometer_x);
+ addr+=2;
+ EEPROM.put(addr, accelerometer_y);
+ addr+=2;
+ EEPROM.put(addr, accelerometer_z);
+ addr+=2;
+
+ cont+=1;
+
   // delay
-  delay(1000);
+  delay(100);
   }
   Serial.println(minimo);
   Serial.println(massimo);
+  EEPROM.write(addr, 1);
+  stop();
+  Serial.println("Finito");
+  Serial.println(addr);
 }
 
 //Ultrasonic distance measurement Sub function
@@ -396,6 +416,25 @@ void setup() {
   
   GYSetup();
   stop();
+  int i=0;
+  int16_t valore;
+  while(i<60){
+    Serial.print("Valore x:");
+    EEPROM.get(i, valore);
+    Serial.print(valore);
+    i+=2;
+    Serial.print("//Valore y:");
+    EEPROM.get(i, valore);
+    Serial.print(valore);
+    i+=2;
+    Serial.print("//Valore z:");
+    EEPROM.get(i, valore);
+    Serial.println(valore);
+    i+=2;
+  }
+  Serial.print("Valore finale:");
+  Serial.println(EEPROM.read(i));
+  Serial.println(i);
 }
 
 void loop() {
