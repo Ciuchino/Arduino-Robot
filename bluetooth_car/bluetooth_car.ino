@@ -1,5 +1,4 @@
-// BLA BLA BLA BLA
- //www.elegoo.com
+//www.elegoo.com
 #include <Servo.h>
 #include <Stepper.h>
 #include <Wire.h>
