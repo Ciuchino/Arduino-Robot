@@ -1,3 +1,4 @@
+// BLA BLA BLA BLA
  //www.elegoo.com
 #include <Servo.h>
 #include <Stepper.h>
@@ -91,8 +92,8 @@ void GYValues() {
   for (i=0; i<EEPROM.length(); i++) {
     EEPROM.write(i, 0);
   }
-  while (cont<10) {
-   if(cont==3) forward();
+  while (cont<100) {
+   if(cont==20) forward();
     
    if (Serial.available() > 0) {
       getstr = Serial.read();
@@ -122,8 +123,8 @@ void GYValues() {
   Serial.print(" | aY = "); Serial.print(convert_int16_to_str(accelerometer_y));
   Serial.print(" | aZ = "); Serial.print(convert_int16_to_str(accelerometer_z));
   // the following equation was taken from the documentation [MPU-6000/MPU-6050 Register Map and Description, p.30]
-  /*Serial.print(" | tmp = "); Serial.print(temperature/340.00+36.53);
-  Serial.print(" | gX = "); Serial.print(convert_int16_to_str(gyro_x));
+  Serial.print(" | tmp = "); Serial.print(temperature/340.00+36.53);
+  /*Serial.print(" | gX = "); Serial.print(convert_int16_to_str(gyro_x));
   Serial.print(" | gY = "); Serial.print(convert_int16_to_str(gyro_y));
   Serial.print(" | gZ = "); Serial.print(convert_int16_to_str(gyro_z));
   Serial.println();*/
@@ -144,7 +145,7 @@ void GYValues() {
  cont+=1;
 
   // delay
-  delay(100);
+  delay(10);
   }
   Serial.println(minimo);
   Serial.println(massimo);
@@ -388,6 +389,7 @@ int azione; // prossima azione da svolgere h
 
 
 void setup() {
+  delay(1000);
   Serial.begin(9600);
  
   Wire.begin(); //Gyroscope setup
@@ -418,7 +420,8 @@ void setup() {
   stop();
   int i=0;
   int16_t valore;
-  while(i<60){
+  while(i<600){
+    if (i==120) Serial.println("Partenza!");
     Serial.print("Valore x:");
     EEPROM.get(i, valore);
     Serial.print(valore);
