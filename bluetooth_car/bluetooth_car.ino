@@ -35,6 +35,7 @@ int16_t accelerometer_x, accelerometer_y, accelerometer_z; // variables for acce
 int16_t gyro_x, gyro_y, gyro_z; // variables for gyro raw data
 int16_t temperature; // variables for temperature data
 char tmp_str[7]; // temporary variable used in convert function
+int16_t GY_x[10]; //array with the newest gyroscope values
 
 char* convert_int16_to_str(int16_t i) { // converts int16 to string. Moreover, resulting strings will have the same length in the debug monitor.
   sprintf(tmp_str, "%6d", i);
@@ -91,8 +92,8 @@ void GYValues() {
   for (i=0; i<EEPROM.length(); i++) {
     EEPROM.write(i, 0);
   }
-  while (cont<100) {
-   if(cont==20) forward();
+  while (cont<200) {
+   if(cont==40) forward();
     
    if (Serial.available() > 0) {
       getstr = Serial.read();
@@ -144,7 +145,7 @@ void GYValues() {
  cont+=1;
 
   // delay
-  delay(10);
+  delay(5);
   }
   Serial.println(minimo);
   Serial.println(massimo);
@@ -153,6 +154,53 @@ void GYValues() {
   Serial.println("Finito");
   Serial.println(addr);
 }
+
+int findAverage() {
+  int cont;
+   sum=0;
+  for(cont=0;cont<10;cont+=1){
+    sum = sum + GY_x[cont];
+  }
+  return(sum/10);
+}
+
+void setupValues() {
+  int cont;
+
+  
+  for(cont=0; cont<10; cont+= 1)
+  {
+    Wire.beginTransmission(MPU_ADDR);
+    Wire.write(0x3B); // starting with register 0x3B (ACCEL_XOUT_H) [MPU-6000 and MPU-6050 Register Map and Descriptions Revision 4.2, p.40]
+    Wire.endTransmission(false); // the parameter indicates that the Arduino will send a restart. As a result, the connection is kept active.
+    Wire.requestFrom(MPU_ADDR, 7*2, true); // request a total of 7*2=14 registers
+    GY_x[cont]= Wire.read()<<8 | Wire.read();
+    delay(5);
+  }
+}
+
+void GY_control(){
+  int16_t acc_x;
+
+  Wire.beginTransmission(MPU_ADDR);
+  Wire.write(0x3B); // starting with register 0x3B (ACCEL_XOUT_H) [MPU-6000 and MPU-6050 Register Map and Descriptions Revision 4.2, p.40]
+  Wire.endTransmission(false); // the parameter indicates that the Arduino will send a restart. As a result, the connection is kept active.
+  Wire.requestFrom(MPU_ADDR, 7*2, true); // request a total of 7*2=14 registers 
+  
+  acc_x = Wire.read()<<8 | Wire.read();
+  int average = findAverage();
+  float variation;
+  int cont;
+  
+  variation = abs((acc_x-average)/(acc_x + average));
+  for(cont=1;cont<10;cont+=1){
+    GY_x[cont-1] = GY_x[cont];
+  }
+  GY_x[9] = acc_x;
+  Serial.print("Variazione: ");
+  Serial.println(variation);
+}
+
 
 //Ultrasonic distance measurement Sub function
 int Distance_test() {
@@ -417,10 +465,11 @@ void setup() {
   
   GYSetup();
   stop();
-  int i=0;
+  setupValues();
+  /*int i=0;
   int16_t valore;
-  while(i<600){
-    if (i==120) Serial.println("Partenza!");
+  while(i<1200){
+    if (i==240) Serial.println("Partenza!");
     Serial.print("Valore x:");
     EEPROM.get(i, valore);
     Serial.print(valore);
@@ -436,10 +485,11 @@ void setup() {
   }
   Serial.print("Valore finale:");
   Serial.println(EEPROM.read(i));
-  Serial.println(i);
+  Serial.println(i);*/
 }
 
 void loop() {
+
     getstr = Serial.read();
     switch(getstr){
     case 'e': armup(); break;
@@ -455,5 +505,6 @@ void loop() {
     case 'G': GYValues(); break;
     case 'r': indipendent(); break;
     }
-    
+    GY_control();
+    delay(5);
   }
