@@ -3,7 +3,7 @@
 #include <Stepper.h>
 #include <Wire.h>
 #include <EEPROM.h>
-// Prima di caricare il codice, rimuovere la componente bluetooth dal robot
+// Remove the bluetooth device before uploading the code
 
 #define ENA 5
 #define ENB 6
@@ -15,9 +15,12 @@
 #define STEPS  32
 #define ITERAZIONIOSTACOLI 3
 
+enum state{goingForward, goingBackward, turningRight, turningLeft, stayingStill, blocked} currentState;// New type to describe the robot state
+
 Stepper small_stepper(STEPS, 2, 10, 4, 12);
 Servo head;
-  
+
+// Variables for hardware  
 int  Steps2Take; 
 unsigned char carSpeed = 150;
 bool state = LOW;
@@ -25,17 +28,22 @@ char getstr;
 int Echo = A4;  
 int Trig = A5; 
 
+//Functions
 void timer(unsigned long differenzaTempo, boolean flagObstacle, boolean flagTimer);
 void forward();
 void back();
 void stop();
+void GY_control();
 
+//Variables for gyroscope control
 const int MPU_ADDR = 0x68; // I2C address of the MPU-6050. If AD0 pin is set to HIGH, the I2C address will be 0x69.
 int16_t accelerometer_x, accelerometer_y, accelerometer_z; // variables for accelerometer raw data
 int16_t gyro_x, gyro_y, gyro_z; // variables for gyro raw data
 int16_t temperature; // variables for temperature data
 char tmp_str[7]; // temporary variable used in convert function
 int16_t GY_x[10]; //array with the newest gyroscope values
+float variations[10]; //array with the last variation values
+
 
 char* convert_int16_to_str(int16_t i) { // converts int16 to string. Moreover, resulting strings will have the same length in the debug monitor.
   sprintf(tmp_str, "%6d", i);
@@ -155,19 +163,28 @@ void GYValues() {
   Serial.println(addr);
 }
 
-int findAverage() {
+//Calculates the average of the GY_X array if source is true, ad of the variations array if source is false
+float findAverage(boolean source) {
   int cont;
-   sum=0;
-  for(cont=0;cont<10;cont+=1){
-    sum = sum + GY_x[cont];
+  float sum=0;
+  if (source== true){
+    for(cont=0;cont<10;cont+=1){
+      sum = sum + GY_x[cont];
+    }
+    return(sum/10);
   }
-  return(sum/10);
+  else {
+    for(cont=0;cont<10;cont+=1){
+      sum = sum + variations[cont];
+    }
+    return(sum/10);    
+  }
 }
 
+//Function to inizialize the arrays
 void setupValues() {
   int cont;
-
-  
+  // Inizialize the GY_x array
   for(cont=0; cont<10; cont+= 1)
   {
     Wire.beginTransmission(MPU_ADDR);
@@ -177,28 +194,58 @@ void setupValues() {
     GY_x[cont]= Wire.read()<<8 | Wire.read();
     delay(5);
   }
+  //Inizialize variations array
+  /*for(cont=0; cont<10; cont+=1){
+    
+    variations[cont] = GY_control(false);
+  }*/
 }
 
-void GY_control(){
-  int16_t acc_x;
-
-  Wire.beginTransmission(MPU_ADDR);
-  Wire.write(0x3B); // starting with register 0x3B (ACCEL_XOUT_H) [MPU-6000 and MPU-6050 Register Map and Descriptions Revision 4.2, p.40]
-  Wire.endTransmission(false); // the parameter indicates that the Arduino will send a restart. As a result, the connection is kept active.
-  Wire.requestFrom(MPU_ADDR, 7*2, true); // request a total of 7*2=14 registers 
-  
-  acc_x = Wire.read()<<8 | Wire.read();
-  int average = findAverage();
-  float variation;
-  int cont;
-  
-  variation = abs((acc_x-average)/(acc_x + average));
-  for(cont=1;cont<10;cont+=1){
-    GY_x[cont-1] = GY_x[cont];
+//Function to analyse the variation value and determine the robot state
+void dataAnalysis(){
+  float variationAverage;
+  //Updates the variations array
+   /*for(cont=1;cont<10;cont+=1){
+    variations[cont-1] = variations[cont];
   }
-  GY_x[9] = acc_x;
-  Serial.print("Variazione: ");
-  Serial.println(variation);
+  variations[9] = currentVariation;
+*/
+  variationAverage = findAverage(false);
+  if (variationAverage < 0.1){ Serial.println("Fermo");}
+  else{ if(variationAverage < 1.0) {Serial.println("Avanti");}
+  else Serial.println("Urto");}
+  
+}
+
+//Function to calculate the gyroscope value variation when moving forward
+float GY_control(boolean analysis){
+  int16_t acc_x;
+  int iteration;
+  for(iteration=0; iteration<10; iteration+=1){
+    Wire.beginTransmission(MPU_ADDR);
+    Wire.write(0x3B); // starting with register 0x3B (ACCEL_XOUT_H) [MPU-6000 and MPU-6050 Register Map and Descriptions Revision 4.2, p.40]
+    Wire.endTransmission(false); // the parameter indicates that the Arduino will send a restart. As a result, the connection is kept active.
+    Wire.requestFrom(MPU_ADDR, 7*2, true); // request a total of 7*2=14 registers 
+    acc_x = Wire.read()<<8 | Wire.read();
+    
+    float average = findAverage(true);
+    float variation;
+    int cont;
+    
+    variation = abs(((float)acc_x-average)/((float)acc_x + average));// Calculates the difference between the new value and the average of the last ten, and normalizes it
+    //Updates the GY_X values
+    for(cont=1;cont<10;cont+=1){
+      GY_x[cont-1] = GY_x[cont];
+    }
+    GY_x[9] = acc_x;
+    
+    if(analysis==false)  return variation; //Variation is requested to inizialize variations array
+    variations[iteration] = variation;
+    delay(10);
+    //Serial.print("Variazione: ");
+    //Serial.println(variation);
+  }
+   dataAnalysis();  
 }
 
 
@@ -243,6 +290,7 @@ void back(){
   digitalWrite(IN2,HIGH);
   digitalWrite(IN3,HIGH);
   digitalWrite(IN4,LOW);
+  currentState = goingBackward;
   Serial.println("Back");
 }
 
@@ -253,6 +301,7 @@ void forward(){
   digitalWrite(IN2,LOW);
   digitalWrite(IN3,LOW);
   digitalWrite(IN4,HIGH);
+  currentState = goingForward;
   Serial.println("Forward");
 }
 
@@ -262,7 +311,8 @@ void right(){
   digitalWrite(IN1,HIGH);
   digitalWrite(IN2,LOW);
   digitalWrite(IN3,HIGH);
-  digitalWrite(IN4,LOW); 
+  digitalWrite(IN4,LOW);
+  currentState = turningRight;
   Serial.println("Right");
 }
 
@@ -273,13 +323,14 @@ void left(){
   digitalWrite(IN2,HIGH);
   digitalWrite(IN3,LOW);
   digitalWrite(IN4,HIGH);
-
+  currentState = turningLeft;
   Serial.println("Left");
 }
 
 void stop(){
   digitalWrite(ENA,LOW);
   digitalWrite(ENB,LOW);
+  currentState = stayingStill;
   Serial.println("Stop!");
 }
 
@@ -465,7 +516,7 @@ void setup() {
   
   GYSetup();
   stop();
-  setupValues();
+  //setupValues();
   /*int i=0;
   int16_t valore;
   while(i<1200){
@@ -505,6 +556,6 @@ void loop() {
     case 'G': GYValues(); break;
     case 'r': indipendent(); break;
     }
-    GY_control();
-    delay(5);
+    //GY_control(true);
+    delay(10);
   }
