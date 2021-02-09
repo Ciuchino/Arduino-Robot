@@ -1,8 +1,8 @@
-//www.elegoo.com
 #include <Servo.h>
 #include <Stepper.h>
 #include <Wire.h>
 #include <EEPROM.h>
+
 // Remove the bluetooth device before uploading the code
 
 #define ENA 5
@@ -44,6 +44,8 @@ int16_t temperature; // variables for temperature data
 char tmp_str[7]; // temporary variable used in convert function
 int16_t GY_x[10]; //array with the newest gyroscope values
 float variations[DIM_VARIATIONS]; //array with the last variation values
+float stopLimit;//max variation value when the robot is still 
+float hitLimit;//min variatio value if the robot its something
 
 
 char* convert_int16_to_str(int16_t i) { // converts int16 to string. Moreover, resulting strings will have the same length in the debug monitor.
@@ -164,6 +166,50 @@ void GYValues() {
   Serial.println(addr);
 }
 
+//Function to calculate the standard deviation for the limits calcule. The parameters are punctators to the average and devStandard variables in findLimits(), so the values are directly saved there
+void deviationStandard(float* average, float* devStandard){
+  float sum=0;
+  float values[200];
+  int cont;
+  *devStandard = 0;
+
+  for(cont=0;cont<200;cont+=1){
+    values[cont]=GY_control(false);
+    sum = sum + values[cont];
+    delay(5);
+  }
+
+
+  *average = sum/200;
+
+  for(cont=0;cont<200;cont+=1){
+    *devStandard = *devStandard + pow(((double)values[cont] - (double)*average),2); 
+  }
+  *devStandard = sqrt(*devStandard/200);
+  Serial.print("Media: ");
+  Serial.println(*average);
+  Serial.print("Deviazione Standard: ");
+  Serial.println(*devStandard);
+}
+
+//Functiont to find the max variation value for when the robot is still and for when is moving 
+void findLimits(){
+  float average; 
+  float devStandard;
+
+  stop();
+  deviationStandard(&average, &devStandard);
+  stopLimit = average + devStandard;
+
+  forward();
+  delay(10);
+  deviationStandard(&average, &devStandard);
+  delay(10);
+  stop();
+
+  hitLimit = average + devStandard;
+}
+
 //Calculates the average of the GY_X array if source is true, ad of the variations array if source is false
 float findAverage(boolean source) {
   int cont;
@@ -212,8 +258,8 @@ void dataAnalysis(){
   variations[9] = currentVariation;
 */
   variationAverage = findAverage(false);
-  if (variationAverage < 0.1){ Serial.println("Fermo");}
-  else{ if(variationAverage < 1G.0) {Serial.println("Avanti");}
+  if (variationAverage < stopLimit){ Serial.println("Fermo");}
+  else{ if(variationAverage < hitLimit) {Serial.println("Avanti");}
   else Serial.println("Urto");}
   
 }
@@ -240,9 +286,10 @@ float GY_control(boolean analysis){
     }
     GY_x[9] = acc_x;
     
+       
     if(analysis==false)  return variation; //Variation is requested to inizialize variations array
     variations[iteration] = variation;
-    delay(30);
+    delay(10);
     //Serial.print("Variazione: ");
     //Serial.println(variation);
   }
@@ -518,6 +565,11 @@ void setup() {
   GYSetup();
   stop();
   setupValues();
+  findLimits();
+  Serial.print("Limite fermo:");
+  Serial.println(stopLimit);
+  Serial.print("Limite urto:");
+  Serial.println(hitLimit);
   /*int i=0;
   int16_t valore;
   while(i<1200){
