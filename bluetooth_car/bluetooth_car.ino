@@ -14,6 +14,7 @@
 #define LED 13
 #define STEPS  32
 #define ITERAZIONIOSTACOLI 3
+#define DIM_VARIATIONS 20
 
 enum state{goingForward, goingBackward, turningRight, turningLeft, stayingStill, blocked} currentState;// New type to describe the robot state
 
@@ -42,7 +43,7 @@ int16_t gyro_x, gyro_y, gyro_z; // variables for gyro raw data
 int16_t temperature; // variables for temperature data
 char tmp_str[7]; // temporary variable used in convert function
 int16_t GY_x[10]; //array with the newest gyroscope values
-float variations[10]; //array with the last variation values
+float variations[DIM_VARIATIONS]; //array with the last variation values
 
 
 char* convert_int16_to_str(int16_t i) { // converts int16 to string. Moreover, resulting strings will have the same length in the debug monitor.
@@ -174,10 +175,10 @@ float findAverage(boolean source) {
     return(sum/10);
   }
   else {
-    for(cont=0;cont<10;cont+=1){
+    for(cont=0;cont<DIM_VARIATIONS;cont+=1){
       sum = sum + variations[cont];
     }
-    return(sum/10);    
+    return(sum/DIM_VARIATIONS);    
   }
 }
 
@@ -212,7 +213,7 @@ void dataAnalysis(){
 */
   variationAverage = findAverage(false);
   if (variationAverage < 0.1){ Serial.println("Fermo");}
-  else{ if(variationAverage < 1.0) {Serial.println("Avanti");}
+  else{ if(variationAverage < 1G.0) {Serial.println("Avanti");}
   else Serial.println("Urto");}
   
 }
@@ -221,7 +222,7 @@ void dataAnalysis(){
 float GY_control(boolean analysis){
   int16_t acc_x;
   int iteration;
-  for(iteration=0; iteration<10; iteration+=1){
+  for(iteration=0; iteration<DIM_VARIATIONS; iteration+=1){
     Wire.beginTransmission(MPU_ADDR);
     Wire.write(0x3B); // starting with register 0x3B (ACCEL_XOUT_H) [MPU-6000 and MPU-6050 Register Map and Descriptions Revision 4.2, p.40]
     Wire.endTransmission(false); // the parameter indicates that the Arduino will send a restart. As a result, the connection is kept active.
@@ -241,7 +242,7 @@ float GY_control(boolean analysis){
     
     if(analysis==false)  return variation; //Variation is requested to inizialize variations array
     variations[iteration] = variation;
-    delay(10);
+    delay(30);
     //Serial.print("Variazione: ");
     //Serial.println(variation);
   }
@@ -516,7 +517,7 @@ void setup() {
   
   GYSetup();
   stop();
-  //setupValues();
+  setupValues();
   /*int i=0;
   int16_t valore;
   while(i<1200){
@@ -556,6 +557,6 @@ void loop() {
     case 'G': GYValues(); break;
     case 'r': indipendent(); break;
     }
-    //GY_control(true);
+    GY_control(true);
     delay(10);
   }
