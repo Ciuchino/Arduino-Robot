@@ -51,7 +51,7 @@ boolean possibleHIT;
 
 
 
-//---------------------------------------------------------- HARDWARE SECTION -----------------------------------------------------------------
+//---------------------------------------------------------- HARDWARE SECTION --------------------------------------------------------------------\\
 
 //Ultrasonic distance measurement Sub function
 int Distance_test() {
@@ -148,8 +148,10 @@ void stateChange(){
 
 
 
-//----------------------------------------------------------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------------------------------------------------------------\\
 
+
+//--------------------------------------------------------------- SETUP SECTION --------------------------------------------------------------------\\
 
 void GYSetup() //function for the GY setup
 {
@@ -192,6 +194,132 @@ void GYSetup() //function for the GY setup
  
   delay(5000);           // wait 5 seconds for next scan
 }
+
+//Function to inizialize the arrays
+void setupValues() {
+  int cont;
+  // Inizialize the GY_x array
+  for(cont=0; cont<10; cont+= 1)
+  {
+    Wire.beginTransmission(MPU_ADDR);
+    Wire.write(0x3B); // starting with register 0x3B (ACCEL_XOUT_H) [MPU-6000 and MPU-6050 Register Map and Descriptions Revision 4.2, p.40]
+    Wire.endTransmission(false); // the parameter indicates that the Arduino will send a restart. As a result, the connection is kept active.
+    Wire.requestFrom(MPU_ADDR, 7*2, true); // request a total of 7*2=14 registers
+    GY_x[cont]= Wire.read()<<8 | Wire.read();
+    delay(5);
+  }
+}
+
+
+//Function to calculate the standard deviation for the limits calcule. The parameters are punctators to the average and devStandard variables in findLimits(), so the values are directly saved there
+void deviationStandard(float* average, float* devStandard){
+  float sum=0;
+  float values[200];
+  int cont;
+  *devStandard = 0;
+
+  for(cont=0;cont<200;cont+=1){
+    values[cont]=GY_control(false);
+    sum = sum + values[cont];
+    delay(5);
+  }
+
+
+  *average = sum/200;
+
+  for(cont=0;cont<200;cont+=1){
+    *devStandard = *devStandard + pow(((double)values[cont] - (double)*average),2); 
+  }
+  *devStandard = sqrt(*devStandard/200);
+  Serial.print("Media: ");
+  Serial.println(*average);
+  Serial.print("Deviazione Standard: ");
+  Serial.println(*devStandard);
+}
+
+
+//Function to find the max variation value for when the robot is still and for when is moving 
+void findLimits(){
+  float average; 
+  float devStandard;
+
+  stop();
+  deviationStandard(&average, &devStandard);
+  stopLimit = average + devStandard;
+
+  forward();
+  delay(10);
+  deviationStandard(&average, &devStandard);
+  delay(10);
+  stop();
+
+  hitLimit = average + devStandard;
+}
+
+
+void setup() {
+  delay(1000);
+  Serial.begin(9600);
+ 
+  Wire.begin(); //Gyroscope setup
+  Wire.beginTransmission(MPU_ADDR); // Begins a transmission to the I2C slave (GY-521 board)
+  Wire.write(0x6B); // PWR_MGMT_1 register
+  Wire.write(0); // set to zero (wakes up the MPU-6050)
+  Wire.endTransmission(true);
+  
+  digitalWrite(8, LOW); //arm
+  digitalWrite(9, LOW);
+  digitalWrite(10, LOW);
+  digitalWrite(11, LOW);
+   
+  head.attach(3);  //head
+  head.write(90);
+  pinMode(Echo, INPUT); 
+  pinMode(Trig, OUTPUT);
+   
+  pinMode(LED, OUTPUT);  //motor 
+  pinMode(IN1,OUTPUT);
+  pinMode(IN2,OUTPUT);
+  pinMode(IN3,OUTPUT);
+  pinMode(IN4,OUTPUT);
+  pinMode(ENA,OUTPUT);
+  pinMode(ENB,OUTPUT);
+  
+  GYSetup();
+  stop();
+  setupValues();
+  findLimits();
+  Serial.print("Limite fermo:");
+  Serial.println(stopLimit);
+  Serial.print("Limite urto:");
+  Serial.println(hitLimit);
+  possibleState = stayingStill;
+  possibleHIT = false;
+  /*int i=0;
+  int16_t valore;
+  while(i<1200){
+    if (i==240) Serial.println("Partenza!");
+    Serial.print("Valore x:");
+    EEPROM.get(i, valore);
+    Serial.print(valore);
+    i+=2;
+    Serial.print("//Valore y:");
+    EEPROM.get(i, valore);
+    Serial.print(valore);
+    i+=2;
+    Serial.print("//Valore z:");
+    EEPROM.get(i, valore);
+    Serial.println(valore);
+    i+=2;
+  }
+  Serial.print("Valore finale:");
+  Serial.println(EEPROM.read(i));
+  Serial.println(i);*/
+}
+
+//-----------------------------------------------------------------------------------------------------------------------------------------------------\\
+
+//---------------------------------------------------------------- GYROSCOPE SECTION -------------------------------------------------------------------\\
 
 /*char* convert_int16_to_str(int16_t i) { // converts int16 to string. Moreover, resulting strings will have the same length in the debug monitor.
   sprintf(tmp_str, "%6d", i);
@@ -268,50 +396,6 @@ void GYValues() {
   Serial.println(addr);
 }*/
 
-//Function to calculate the standard deviation for the limits calcule. The parameters are punctators to the average and devStandard variables in findLimits(), so the values are directly saved there
-void deviationStandard(float* average, float* devStandard){
-  float sum=0;
-  float values[200];
-  int cont;
-  *devStandard = 0;
-
-  for(cont=0;cont<200;cont+=1){
-    values[cont]=GY_control(false);
-    sum = sum + values[cont];
-    delay(5);
-  }
-
-
-  *average = sum/200;
-
-  for(cont=0;cont<200;cont+=1){
-    *devStandard = *devStandard + pow(((double)values[cont] - (double)*average),2); 
-  }
-  *devStandard = sqrt(*devStandard/200);
-  Serial.print("Media: ");
-  Serial.println(*average);
-  Serial.print("Deviazione Standard: ");
-  Serial.println(*devStandard);
-}
-
-//Functiont to find the max variation value for when the robot is still and for when is moving 
-void findLimits(){
-  float average; 
-  float devStandard;
-
-  stop();
-  deviationStandard(&average, &devStandard);
-  stopLimit = average + devStandard;
-
-  forward();
-  delay(10);
-  deviationStandard(&average, &devStandard);
-  delay(10);
-  stop();
-
-  hitLimit = average + devStandard;
-}
-
 //Calculates the average of the GY_X array if source is true, ad of the variations array if source is false
 float findAverage(boolean source) {
   int cont;
@@ -328,26 +412,6 @@ float findAverage(boolean source) {
     }
     return(sum/DIM_VARIATIONS);    
   }
-}
-
-//Function to inizialize the arrays
-void setupValues() {
-  int cont;
-  // Inizialize the GY_x array
-  for(cont=0; cont<10; cont+= 1)
-  {
-    Wire.beginTransmission(MPU_ADDR);
-    Wire.write(0x3B); // starting with register 0x3B (ACCEL_XOUT_H) [MPU-6000 and MPU-6050 Register Map and Descriptions Revision 4.2, p.40]
-    Wire.endTransmission(false); // the parameter indicates that the Arduino will send a restart. As a result, the connection is kept active.
-    Wire.requestFrom(MPU_ADDR, 7*2, true); // request a total of 7*2=14 registers
-    GY_x[cont]= Wire.read()<<8 | Wire.read();
-    delay(5);
-  }
-  //Inizialize variations array
-  /*for(cont=0; cont<10; cont+=1){
-    
-    variations[cont] = GY_control(false);
-  }*/
 }
 
 //Function to analyse the variation value and determine the robot state
@@ -418,7 +482,10 @@ float GY_control(boolean analysis){
    dataAnalysis();  
 }
 
+//-------------------------------------------------------------------------------------------------------------------------------------------------------\\
 
+
+//----------------------------------------------------- OBSTACLE CONTROL SECTION -------------------------------------------------------------------------\\
 
 boolean obstacle(int contatore, boolean flagNotRicorsione, int distanzaMassima) { //funzione per determinare se c'è un ostacolo. si invoca per tre volte, con uno stacco di 0,05 secondi, effettuando per tre volte il controllo
   int distanza;                                      //Il secondo parametro ci dice se la funzione è stata invocata per la prima volta(quindi dal robot mentre compiva un'azione, = false) oppure dalla funzione timer dopo che era già stata riscontrato un ostacolo
@@ -493,6 +560,10 @@ void avoidObstacle() { // Se c'è un ostacolo gira in maniera saucle a destra o 
   }
   stop();
 }
+
+//------------------------------------------------------------------------------------------------------------------------------------------------------\\
+
+//---------------------------------------------------------------- MAIN CONTROL SECTION-----------------------------------------------------------------\\
 
 //funzione che rimane attiva per un certo tempo dato come parametro (in millisecondi) e compie il controllo sulla presenza di ostacoli. Terzo parametro = true se la funzione è stata invocata da un'altra funzione timer per ricorsione e il secondo parametro = true se è stata invocata da una funzione obstacle (altrimenti false)
 //Il terzo parametro viene passato alla funzione obstacle e serve per dirgli se è la prima volta che viene invocata, oppure viene invocata dopo una ricorsione di timer
@@ -574,65 +645,6 @@ int azione; // prossima azione da svolgere h
 }
 
 
-void setup() {
-  delay(1000);
-  Serial.begin(9600);
- 
-  Wire.begin(); //Gyroscope setup
-  Wire.beginTransmission(MPU_ADDR); // Begins a transmission to the I2C slave (GY-521 board)
-  Wire.write(0x6B); // PWR_MGMT_1 register
-  Wire.write(0); // set to zero (wakes up the MPU-6050)
-  Wire.endTransmission(true);
-  
-  digitalWrite(8, LOW); //arm
-  digitalWrite(9, LOW);
-  digitalWrite(10, LOW);
-  digitalWrite(11, LOW);
-   
-  head.attach(3);  //head
-  head.write(90);
-  pinMode(Echo, INPUT); 
-  pinMode(Trig, OUTPUT);
-   
-  pinMode(LED, OUTPUT);  //motor 
-  pinMode(IN1,OUTPUT);
-  pinMode(IN2,OUTPUT);
-  pinMode(IN3,OUTPUT);
-  pinMode(IN4,OUTPUT);
-  pinMode(ENA,OUTPUT);
-  pinMode(ENB,OUTPUT);
-  
-  GYSetup();
-  stop();
-  setupValues();
-  findLimits();
-  Serial.print("Limite fermo:");
-  Serial.println(stopLimit);
-  Serial.print("Limite urto:");
-  Serial.println(hitLimit);
-  possibleState = stayingStill;
-  possibleHIT = false;
-  /*int i=0;
-  int16_t valore;
-  while(i<1200){
-    if (i==240) Serial.println("Partenza!");
-    Serial.print("Valore x:");
-    EEPROM.get(i, valore);
-    Serial.print(valore);
-    i+=2;
-    Serial.print("//Valore y:");
-    EEPROM.get(i, valore);
-    Serial.print(valore);
-    i+=2;
-    Serial.print("//Valore z:");
-    EEPROM.get(i, valore);
-    Serial.println(valore);
-    i+=2;
-  }
-  Serial.print("Valore finale:");
-  Serial.println(EEPROM.read(i));
-  Serial.println(i);*/
-}
 
 void loop() {
 
@@ -652,3 +664,5 @@ void loop() {
     case 'r': indipendent(); break;
     }
   }
+
+//-------------------------------------------------------------------------------------------------------------------------------------------------------\\
