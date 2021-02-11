@@ -27,7 +27,8 @@ unsigned char carSpeed = 150;
 bool state = LOW;
 char getstr;
 int Echo = A4;  
-int Trig = A5; 
+int Trig = A5;
+boolean lastActionTurning = false; 
 
 //Functions
 void timer(unsigned long differenzaTempo, boolean flagObstacle, boolean flagTimer);
@@ -51,7 +52,7 @@ boolean possibleHIT;
 
 
 
-//---------------------------------------------------------- HARDWARE SECTION --------------------------------------------------------------------\\
+//-------------------------------------------------------------- HARDWARE SECTION --------------------------------------------------------------------\\
 
 //Ultrasonic distance measurement Sub function
 int Distance_test() {
@@ -148,7 +149,7 @@ void stateChange(){
 
 
 
-//----------------------------------------------------------------------------------------------------------------------------------------------\\
+//--------------------------------------------------------------------------------------------------------------------------------------------------\\
 
 
 //--------------------------------------------------------------- SETUP SECTION --------------------------------------------------------------------\\
@@ -285,16 +286,6 @@ void setup() {
   pinMode(ENA,OUTPUT);
   pinMode(ENB,OUTPUT);
   
-  GYSetup();
-  stop();
-  setupValues();
-  findLimits();
-  Serial.print("Limite fermo:");
-  Serial.println(stopLimit);
-  Serial.print("Limite urto:");
-  Serial.println(hitLimit);
-  possibleState = stayingStill;
-  possibleHIT = false;
   /*int i=0;
   int16_t valore;
   while(i<1200){
@@ -440,11 +431,14 @@ void dataAnalysis(){
     }
   }
   else {
-    if(variationAverage >stopLimit){
+    if(variationAverage > stopLimit){
     possibleState = goingForward;
     }
     else{
-    possibleState = stayingStill;
+      possibleState = stayingStill;
+      if (currentState == goingForward){
+        possibleState = blocked;
+      }
     }
    }
   }
@@ -475,7 +469,7 @@ float GY_control(boolean analysis){
        
     if(analysis==false)  return variation; //Variation is requested to inizialize variations array
     variations[iteration] = variation;
-    delay(10);
+    delay(5);
     //Serial.print("Variazione: ");
     //Serial.println(variation);
   }
@@ -485,14 +479,14 @@ float GY_control(boolean analysis){
 //-------------------------------------------------------------------------------------------------------------------------------------------------------\\
 
 
-//----------------------------------------------------- OBSTACLE CONTROL SECTION -------------------------------------------------------------------------\\
+//----------------------------------------------------- OBSTACLES CONTROL SECTION -------------------------------------------------------------------------\\
 
-boolean obstacle(int contatore, boolean flagNotRicorsione, int distanzaMassima) { //funzione per determinare se c'è un ostacolo. si invoca per tre volte, con uno stacco di 0,05 secondi, effettuando per tre volte il controllo
-  int distanza;                                      //Il secondo parametro ci dice se la funzione è stata invocata per la prima volta(quindi dal robot mentre compiva un'azione, = false) oppure dalla funzione timer dopo che era già stata riscontrato un ostacolo
-  distanza = Distance_test(); // distanza misurata   //In questa maniera i 3 controlli sull'ostacolo vengono eseguiti solo se il robot sta compiendo un'azione, come andare avanti, e non se sta girando per evitare un altro ostacolo
+boolean obstacle(int contatore, boolean flagNotRicorsione, int distanzaMassima) { // function to determine if there's an obstacle. It calls itsself three times, to ddo three controls
+  int distanza;                                      // the second parameter tells the function if it has been called for the first time(so while the robot was moving), or by the timer function after an obstacle had already been seen
+  distanza = Distance_test(); // distance measured 
 
-  if (distanza < distanzaMassima) { // distanza minore di 20 cm
-    if (contatore == 1 or flagNotRicorsione == true) return (true); // restituisce vero se c'è un ostacolo, altrimenti è falso
+  if (distanza < distanzaMassima) { // distance less than 20 cm
+    if (contatore == 1 or flagNotRicorsione == true) return (true); // returns true if there's an oobstacle and false instead
     timer(50, true, true);
     return obstacle(contatore-1, false, 20);
   }
@@ -503,7 +497,7 @@ boolean headLeft(){
     Serial.println("head left");
     int headAngle = head.read() + 50;
     head.write(headAngle);
-    while (headAngle < 170) { //gira la testa a sinistra e se vede un ostacolo lo riferisce alla funzione avoidObastacle, che provvederà a continuare a girare. Questo finchè la testa non si è girata di 90 gradi
+    while (headAngle < 170) { // turns his head on the left and tells the avoidObsatcle function, that will eventually turn the robot. This until the head hasn't turned for 90 degrees
       headAngle=head.read();
       Serial.println(headAngle);
       headAngle=headAngle + 10;
@@ -535,7 +529,7 @@ boolean headRight(){
    return (false);
 }
 
-void avoidObstacle() { // Se c'è un ostacolo gira in maniera saucle a destra o a sinistra e continua a girare finchè non si è girato di 90 gradi in pratica
+void avoidObstacle() { // If there's an obstacle turns randomly right or left and controls again if there's another one 
   boolean obstaclePresence;
   int sceltaAzione = random(1,3);
   while (true) {
@@ -543,17 +537,17 @@ void avoidObstacle() { // Se c'è un ostacolo gira in maniera saucle a destra o 
     else obstaclePresence = headLeft();
     headCenter();
     if (obstaclePresence == true) {
-      sceltaAzione = 3 - sceltaAzione; // Se vedo un ostacolo a destra mi giro a sinistra e vicecersa     
+      sceltaAzione = 3 - sceltaAzione; // If there's an obstacle on one side, controls the other one    
       if (sceltaAzione == 1) obstaclePresence = headRight();
       else obstaclePresence = headLeft();
       headCenter();
-      if (obstaclePresence == true) { // faccio il controllo dall'altro lato. Se rilevo un ostacolo torno un po' indietro e ci riprovo
+      if (obstaclePresence == true) { // Controls on the other side. If there's an obstacle goes a bit back
         back();
         timer(1000, true, false);
-        continue; // torno su per rifare il controllo
+        continue; // goes up for another control
         } 
       } 
-    if (sceltaAzione == 1) right(); // gira a destra
+    if (sceltaAzione == 1) right(); // turns right
     else left();
     timer(1500, true, false);
     break;
@@ -565,24 +559,24 @@ void avoidObstacle() { // Se c'è un ostacolo gira in maniera saucle a destra o 
 
 //---------------------------------------------------------------- MAIN CONTROL SECTION-----------------------------------------------------------------\\
 
-//funzione che rimane attiva per un certo tempo dato come parametro (in millisecondi) e compie il controllo sulla presenza di ostacoli. Terzo parametro = true se la funzione è stata invocata da un'altra funzione timer per ricorsione e il secondo parametro = true se è stata invocata da una funzione obstacle (altrimenti false)
-//Il terzo parametro viene passato alla funzione obstacle e serve per dirgli se è la prima volta che viene invocata, oppure viene invocata dopo una ricorsione di timer
+// function remains active for a certain time given by the first parameter e controlls if there are obstacles or if the robot is blocked.
+// the second parameter is true if the function is called by the obstacle function
+// the third parameter is true if the funciton is called by itsself (ricorsion). This parameter is passed the the obstacle function.
 void timer(unsigned long differenzaTempo, boolean flagObstacle, boolean flagTimer) {
   unsigned long tempoIniziale;
   unsigned long tempoCorrente;
-  tempoIniziale = millis(); //calcola il tempo iniziale in millisecondi
+  tempoIniziale = millis(); //calculates the time in milliseconds
   while (true) {
     
-    if (flagObstacle == false and obstacle(ITERAZIONIOSTACOLI, flagTimer, 15)== true) { // Rilevato un ostacolo
+    if (flagObstacle == false and obstacle(ITERAZIONIOSTACOLI, flagTimer, 15)== true) { // Sees an obstacle
 
       Serial.println("OSTACOLO!");
-      if (flagTimer == false){ // funzione timer invocata da funzione indipendent e non da timer per ricorsione
+      if (flagTimer == false){ // Timer function calle dby indipendent function and not by timer itself
        stop();
        delay(500);      
        stateChange();     
       }
       avoidObstacle();
-      // timer(0, false, true); // se c'è un ostacolo gira a destra finchè vede un ostacolo e passa alla funzione il parametro false, cosi se la funzione continua a rilevare un ostacolo mentre gira, obastacle sa che sta girando, e non che sta compiendo una azione
       if (flagTimer == false) stateChange();
       return;
     }
@@ -597,7 +591,7 @@ void timer(unsigned long differenzaTempo, boolean flagObstacle, boolean flagTime
     
     tempoCorrente = millis();
     if ((tempoCorrente - tempoIniziale) > differenzaTempo){ 
-      break;// Calcola il tempo passato dall'inizio della chiamata alla funzione, se maggiore di quell dato come input esce
+      break;// Calculates the time passed from the function call, if bigger than the one given as a parameter exits the function
     }
   }
   if (flagObstacle == false){
@@ -608,7 +602,17 @@ void timer(unsigned long differenzaTempo, boolean flagObstacle, boolean flagTime
 }
 
 void indipendent(){
-int azione; // prossima azione da svolgere h
+  //SETUP 
+  setupValues();
+  findLimits();
+  Serial.print("Limite fermo:");
+  Serial.println(stopLimit);
+  Serial.print("Limite urto:");
+  Serial.println(hitLimit);
+  possibleState = stayingStill;
+  possibleHIT = false;
+  
+  int azione; // next move
   while (true) {
     if (Serial.available() > 0) {
       getstr = Serial.read();
@@ -626,19 +630,22 @@ int azione; // prossima azione da svolgere h
       // timer(0, false, true); // se c'è un ostacolo torna indietro per 2 secondi
     } */
     delay(2000);
-    azione = random(1,4); // 1 va avanti, 2 gira a destra e e 3 gira a sinistra
-    if (azione == 1) {
+    azione = random(1,4); // 1 goes forward, 2 turns right, 3 turns left
+    if (azione == 1 or lastActionTurning == true) {
       forward();
-      timer(random(8000, 12000), false, false); // funzione per compiere l'azione per un eterminato tempo passato come parametro
+      lastActionTurning = false;
+      timer(random(8000, 12000), false, false); // function used to complete an action for a determined amount of time given as a parameter
     }
     else {
       if (azione == 2) {
         left();
-        timer(random(5000, 8000), false, false); //gira a destra per un tempo casuale compreso tra 1 e 8 secondi
+        lastActionTurning = true;
+        timer(random(5000, 8000), false, false); 
       }
       else {
         right();
-        timer(random(5000, 8000), false, false); // gira a sinistra per un tempo casuale compreso tra 1 e 8 secondi
+        lastActionTurning = true;
+        timer(random(5000, 8000), false, false);
       }
     }
   }
