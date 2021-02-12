@@ -667,7 +667,6 @@ void loop() {
     case 'B': left(); break;
     case 'D': right();break;
     case 'S': stop();   break;
-//    case 'G': GYValues(); break;
     case 'r': indipendent(); break;
     }
   }
