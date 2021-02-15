@@ -6,7 +6,7 @@
 #####
 								HARDWARE
 
--- Arduino mega 2560 controller board;
+-- Arduino mega 2560 controller board;\\
 -- V5.0 extension board;
 -- L298N motor driver board;
 -- Hc-08 Ble module;
@@ -22,7 +22,7 @@
 
 
 
-								SOFTWARE
+								 SOFTWARE
 
 The code is divided into 5 sections:
 -- Hardware Section: functions here directly communicate with the arduino motherboard. Their main purpose is to activate the robot parts(motors, ultrasonic sensor).
