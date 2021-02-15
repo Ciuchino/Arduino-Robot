@@ -34,9 +34,11 @@
 
 
 
+
 								 SOFTWARE
 
 The code is divided into 5 sections:
+
 -- Hardware Section: functions here directly communicate with the arduino motherboard. Their main purpose is to activate the robot parts(motors, ultrasonic sensor).
 
 -- Setup Section: this is where the setup happens. 
