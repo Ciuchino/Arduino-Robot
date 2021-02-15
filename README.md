@@ -6,7 +6,8 @@
 #####
 								HARDWARE
 
--- Arduino mega 2560 controller board;\\
+-- Arduino mega 2560 controller board;
+
 -- V5.0 extension board;
 -- L298N motor driver board;
 -- Hc-08 Ble module;
