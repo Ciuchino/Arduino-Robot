@@ -17,12 +17,19 @@
 -- GY-521 module;
 
 -- Ultrasonic Sensor;
+
 -- Servo motor;
+
 -- Stepper motor
+
 -- ULN2003 stepper motor driver module;
+
 -- Motor X4;
+
 -- Cell box;
+
 -- 18650 battery X2;
+
 -- Wheel X4;
 
 
