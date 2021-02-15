@@ -1,10 +1,10 @@
-							   ##ARDUINO ROBOT CAR
+##							   ARDUINO ROBOT CAR
 #
 ##
 ###
 ####
 #####
-								#HARDWARE
+								HARDWARE
 
 -- Arduino mega 2560 controller board;
 
@@ -35,7 +35,7 @@
 
 
 
-								 #SOFTWARE
+								 SOFTWARE
 
 The code is divided into 5 sections:
 
