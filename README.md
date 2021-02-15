@@ -1,4 +1,4 @@
-							   Arduino-Robot Car
+							   ARDUINO ROBOT CAR
 #
 ##
 ###
